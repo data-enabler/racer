@@ -3,6 +3,7 @@ package states
 	import flash.filters.*;
 	import flash.geom.*;
 	import flash.media.Sound;
+	import flash.text.TextField;
 	import org.flixel.*;
 	import org.flixel.system.input.Mouse;
 	import audio.*;
@@ -13,9 +14,8 @@ package states
 	 */
 	public class PlayState extends FlxState 
 	{
-		private const MID_X:int = FlxG.width / 2;
-		private const MID_Y:int = FlxG.height / 2;
-		private const DISP_RADIUS:int = Math.sqrt(FlxG.width * FlxG.width + FlxG.height * FlxG.height) / 2;
+		private const ZOOM:Number = 2;
+		private const DISP_RADIUS:int = Math.sqrt((FlxG.width / ZOOM) * (FlxG.width / ZOOM) + (FlxG.height / ZOOM) * (FlxG.height / ZOOM)) / 2;
 		private const SPEED_MULTIPLIER:Number = 1.0;
 		private const SPEED_MAX:Number = 5.0;
 		private const SPEED_INCREMENT_KEYBOARD:Number = 0.01;
@@ -24,7 +24,7 @@ package states
 		private const DIR_INCREMENT_MOUSE:Number = 0.5;
 		private const BLUR_RATIO:Number = 10.0;
 		
-		[Embed(source="../../res/level.png")]
+		[Embed(source = "../../res/level.png")]
 		private var LevelMap:Class;
 		[Embed(source = "../../res/sewing machine normal.mp3")]
 		private var SewingMachine:Class;
@@ -39,43 +39,74 @@ package states
 		private var dir:Number;
 		private var speed:Number;
 		
-		private var txtX:FlxText;
+		private var txtX:TextField;
+		private var txtY:TextField;
+		private var txtSpeed:TextField;
+		private var txtDir:TextField;
+		/*private var txtX:FlxText;
 		private var txtY:FlxText;
 		private var txtSpeed:FlxText;
-		private var txtDir:FlxText;
+		private var txtDir:FlxText;*/
 		
 		override public function create():void
 		{
 			FlxG.bgColor = 0xff224466;
 			//FlxG.visualDebug = true;
 			
-			track = new FlxSprite(MID_X, MID_Y, LevelMap);
-			track.antialiasing = true;
-			filter = new BlurFilter(0, 0, BitmapFilterQuality.MEDIUM);
+			track = new FlxSprite(0, 0, LevelMap);
+			filter = new BlurFilter(0, 0, BitmapFilterQuality.LOW);
 			needle = new FlxSprite();
-			needle.makeGraphic(2, 2);
-			needle.x = MID_X - 1;
-			needle.y = MID_Y - 1;
+			needle.makeGraphic(4, 4);
+			FlxG.camera.target = needle;
+			FlxG.camera.zoom = ZOOM;
+			FlxG.camera.antialiasing = true;
 			add(track);
 			add(needle);
+			
 			x = 40;
 			y = 40;
 			dir = 350;
 			speed = 1.0;
 			
 			FlxG.mouse.show();
+			
 			musicPlayer = new MP3Player();
 			bgAudio = new SewingMachine() as Sound;
 			musicPlayer.playLoadedSound(bgAudio);
 			
-			txtX = new FlxText(0, 0, 150);
+			// debug info
+			txtX = new TextField();
+			txtY = new TextField();
+			txtSpeed = new TextField();
+			txtDir = new TextField();
+			txtX.textColor = 0xFFFFFF;
+			txtY.textColor = 0xFFFFFF;
+			txtSpeed.textColor = 0xFFFFFF;
+			txtDir.textColor = 0xFFFFFF;
+			txtX.x = 0;
+			txtX.y = 0;
+			txtY.x = 0;
+			txtY.y = 12;
+			txtSpeed.x = 0;
+			txtSpeed.y = 24;
+			txtDir.x = 0;
+			txtDir.y = 36;
+			FlxG.camera.getContainerSprite().parent.addChild(txtX);
+			FlxG.camera.getContainerSprite().parent.addChild(txtY);
+			FlxG.camera.getContainerSprite().parent.addChild(txtSpeed);
+			FlxG.camera.getContainerSprite().parent.addChild(txtDir);
+			/*txtX = new FlxText(0, 0, 150);
 			txtY = new FlxText(0, 12, 150);
 			txtSpeed = new FlxText(0, 24, 150);
 			txtDir = new FlxText(0, 36, 150);
+			txtX.scrollFactor = new FlxPoint(0, 0);
+			txtY.scrollFactor = new FlxPoint(0, 0);
+			txtSpeed.scrollFactor = new FlxPoint(0, 0);
+			txtDir.scrollFactor = new FlxPoint(0, 0);
 			add(txtX);
 			add(txtY);
 			add(txtSpeed);
-			add(txtDir);
+			add(txtDir);*/
 		}
 		
 		override public function update():void
@@ -108,11 +139,11 @@ package states
 			var intY:int = Math.floor(y);
 			track.framePixels.applyFilter(track.pixels, new Rectangle(intX - DISP_RADIUS, intY - DISP_RADIUS, DISP_RADIUS*2, DISP_RADIUS*2), new Point(intX - DISP_RADIUS, intY - DISP_RADIUS), filter);
 			
-			// move and rotate track
-			track.x = MID_X - x;
-			track.y = MID_Y - y;
-			track.origin = new FlxPoint(x, y);
-			track.angle = dir;
+			// move and rotate camera
+			needle.x = x;
+			needle.y = y;
+			needle.angle = 360 - dir;
+			FlxG.camera.angle = dir;
 			
 			// adjust audio speed
 			musicPlayer.playbackSpeed = speed;
