@@ -1,7 +1,7 @@
 package states 
 {
-	import flash.display.Sprite;
 	import flash.filters.*;
+	import flash.geom.*;
 	import flash.media.Sound;
 	import org.flixel.*;
 	import org.flixel.system.input.Mouse;
@@ -15,18 +15,19 @@ package states
 	{
 		private const MID_X:int = FlxG.width / 2;
 		private const MID_Y:int = FlxG.height / 2;
+		private const DISP_RADIUS:int = Math.sqrt(FlxG.width * FlxG.width + FlxG.height * FlxG.height) / 2;
 		private const SPEED_MULTIPLIER:Number = 1.0;
 		private const SPEED_MAX:Number = 5.0;
 		private const SPEED_INCREMENT_KEYBOARD:Number = 0.01;
 		private const SPEED_INCREMENT_MOUSE:Number = 0.003;
 		private const DIR_INCREMENT_KEYBOARD:Number = 1;
 		private const DIR_INCREMENT_MOUSE:Number = 0.5;
-		private const BLUR_RATIO:Number = 5.0;
+		private const BLUR_RATIO:Number = 10.0;
 		
 		[Embed(source="../../res/level.png")]
-		private var levelMap:Class;
+		private var LevelMap:Class;
 		[Embed(source = "../../res/sewing machine normal.mp3")]
-		private var sewingMachine:Class;
+		private var SewingMachine:Class;
 		
 		private var track:FlxSprite;
 		private var filter:BitmapFilter;
@@ -46,7 +47,10 @@ package states
 		override public function create():void
 		{
 			FlxG.bgColor = 0xff224466;
-			track = new FlxSprite(MID_X, MID_Y, levelMap);
+			//FlxG.visualDebug = true;
+			
+			track = new FlxSprite(MID_X, MID_Y, LevelMap);
+			track.antialiasing = true;
 			filter = new BlurFilter(0, 0, BitmapFilterQuality.MEDIUM);
 			needle = new FlxSprite();
 			needle.makeGraphic(2, 2);
@@ -61,7 +65,7 @@ package states
 			
 			FlxG.mouse.show();
 			musicPlayer = new MP3Player();
-			bgAudio = new sewingMachine() as Sound;
+			bgAudio = new SewingMachine() as Sound;
 			musicPlayer.playLoadedSound(bgAudio);
 			
 			txtX = new FlxText(0, 0, 150);
@@ -97,14 +101,18 @@ package states
 			txtSpeed.text = speed.toString();
 			txtDir.text = dir.toString();
 			
+			// update filter
+			var blur:Number = Math.max(speed - 1.0, 0) * BLUR_RATIO;
+			filter = new BlurFilter(blur, blur, BitmapFilterQuality.HIGH);
+			var intX:int = Math.floor(x);
+			var intY:int = Math.floor(y);
+			track.framePixels.applyFilter(track.pixels, new Rectangle(intX - DISP_RADIUS, intY - DISP_RADIUS, DISP_RADIUS*2, DISP_RADIUS*2), new Point(intX - DISP_RADIUS, intY - DISP_RADIUS), filter);
+			
 			// move and rotate track
 			track.x = MID_X - x;
 			track.y = MID_Y - y;
 			track.origin = new FlxPoint(x, y);
 			track.angle = dir;
-			
-			// update filter
-			filter = new BlurFilter(Math.abs(dx * BLUR_RATIO), Math.abs(dy * BLUR_RATIO), BitmapFilterQuality.MEDIUM);
 			
 			// adjust audio speed
 			musicPlayer.playbackSpeed = speed;
