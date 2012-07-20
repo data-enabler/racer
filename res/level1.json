@@ -1,0 +1,16 @@
+{
+	"start"			: { "x":40, "y":40 },
+	"startAngle"	: 350,
+	"end"			: { "x":1560, "y":1560 },
+	"wallImg"		: "res/wall.png",
+	"walls"	: [
+		{
+			"x"	: 310,
+			"y"	: 125,
+			"width"	: 100,
+			"angle"	: 135,
+			"openFor"	: 1500,
+			"closedFor"	: 500
+		}
+	]
+}

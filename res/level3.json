@@ -1,0 +1,7 @@
+{
+	"start"			: { "x":40, "y":40 },
+	"startAngle"	: 340,
+	"end"			: { "x":360, "y":160 },
+	"wallImg"		: "res/wall.png",
+	"walls"	: []
+}

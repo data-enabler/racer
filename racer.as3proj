@@ -17,6 +17,7 @@
   <classpaths>
     <class path="src" />
     <class path="lib\AdamAtomic-flixel-8989e50" />
+    <class path="lib\AS3CoreLib" />
   </classpaths>
   <!-- Build options -->
   <build>

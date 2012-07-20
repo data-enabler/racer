@@ -5,6 +5,8 @@ package states
 	import flash.geom.*;
 	import flash.media.*;
 	import flash.text.*;
+	import com.adobe.serialization.json.*;
+	import levels.Levels;
 	import objects.*;
 	import org.flixel.*;
 		
@@ -24,12 +26,14 @@ package states
 		private const DIR_INCREMENT_MOUSE:Number = 0.5;
 		private const BLUR_RATIO:Number = 10.0;
 		
-		[Embed(source = "../../res/level.png")]
-		private var LevelMap:Class;
 		[Embed(source = "../../res/sewing machine normal.mp3")]
 		private var SewingMachine:Class;
 		
-		private var track:FlxSprite;
+		private var currentTrack:uint;
+		private var tracks:Array;
+		private var trackGroup:FlxGroup;
+		private var wallGroup:FlxGroup;
+		private var finished:Boolean;
 		private var filter:BitmapFilter;
 		private var needle:FlxSprite;
 		private var wall:Wall;
@@ -50,29 +54,27 @@ package states
 			FlxG.bgColor = 0xff224466;
 			//FlxG.visualDebug = true;
 			
-			track = new FlxSprite(0, 0, LevelMap);
 			filter = new BlurFilter(0, 0, BitmapFilterQuality.LOW);
 			needle = new FlxSprite();
 			needle.makeGraphic(4, 4);
+			
 			FlxG.camera.target = needle;
 			FlxG.camera.zoom = ZOOM;
 			FlxG.camera.antialiasing = true;
-			add(track);
-			add(needle);
-			
-			x = 40;
-			y = 40;
-			dir = 350;
-			speed = 1.0;
-			
 			FlxG.mouse.show();
+			
+			trackGroup = new FlxGroup();
+			wallGroup  = new FlxGroup();
+			loadTracks(["level1", "level3", "level2"]);
+			resetMap();
+			
+			add(trackGroup);
+			add(needle);
+			add(wallGroup);
 			
 			musicPlayer = new MP3Player();
 			bgAudio = new SewingMachine() as Sound;
 			musicPlayer.playLoadedSound(bgAudio);
-			
-			wall = new Wall(310, 125, 100, 225, 2000, 500);
-			add(wall);
 			
 			// debug info
 			txtX = new TextField();
@@ -99,6 +101,8 @@ package states
 		
 		override public function update():void
 		{
+			super.update();
+			
 			keyboardInput();
 			mouseInput();
 			
@@ -106,12 +110,13 @@ package states
 			var dy:Number = speed * SPEED_MULTIPLIER * Math.sin(dir / 180 * Math.PI) * -1;
 			
 			// if not near track end
-			if (track.width - x >= 40 && track.height - y >= 40) {
+			if (!finished) {
 				x += dx;
 				y += dy;
 			}
 			else {
-				musicPlayer.stop();
+				currentTrack = 0;
+				resetMap();
 			}
 			
 			// debug info display
@@ -123,9 +128,11 @@ package states
 			// update filter
 			var blur:Number = Math.max(speed - 1.0, 0) * BLUR_RATIO;
 			filter = new BlurFilter(blur, blur, BitmapFilterQuality.HIGH);
-			var intX:int = Math.floor(x);
-			var intY:int = Math.floor(y);
-			track.framePixels.applyFilter(track.pixels, new Rectangle(intX - DISP_RADIUS, intY - DISP_RADIUS, DISP_RADIUS*2, DISP_RADIUS*2), new Point(intX - DISP_RADIUS, intY - DISP_RADIUS), filter);
+			var intX:int = Math.floor(x) - tracks[currentTrack].img.x;
+			var intY:int = Math.floor(y) - tracks[currentTrack].img.y;
+			tracks[currentTrack].img.framePixels.applyFilter(tracks[currentTrack].img.pixels, 
+				new Rectangle(intX - DISP_RADIUS, intY - DISP_RADIUS, DISP_RADIUS * 2, DISP_RADIUS * 2), 
+				new Point(intX - DISP_RADIUS, intY - DISP_RADIUS), filter);
 			
 			// move and rotate camera
 			needle.x = x;
@@ -135,16 +142,97 @@ package states
 			
 			// adjust audio speed
 			musicPlayer.playbackSpeed = speed;
+			//musicPlayer.playbackSpeed = 0;
 			
-			wall.update();
+			updateMap();
 			
 			// if collision
-			if (track.pixels.getPixel(x, y) == 0x0000ff) {
-				reset();
+			if (trackCollision()) {
+				resetMap();
 			}
-			if (wall.collides(needle)) {
-				reset();
+			for (var i:String in wallGroup.members) {
+				for (var j:String in wallGroup.members[i].members) {
+					var wall:Wall = wallGroup.members[i].members[j];
+					if (wall.collides(needle)) {
+						resetMap();
+					}
+				}
 			}
+		}
+		
+		private function loadTracks(names:Array):void
+		{
+			var trackX:int = 0;
+			var trackY:int = 0;
+			
+			currentTrack = 0;
+			finished = false;
+			tracks = new Array(names.length);
+			for (var i:uint = 0; i < names.length; i++) {
+				tracks[i] = JSON.decode(new Levels[names[i]]);
+				tracks[i].img = new FlxSprite(trackX - tracks[i].start.x, trackY - tracks[i].start.y, Levels[names[i] + "Img"]);
+				tracks[i].wallGroup = new FlxGroup();
+				for (var j:String in tracks[i].walls) {
+					var w:Object = tracks[i].walls[j];
+					var wall:Wall = new Wall(w.x + trackX - tracks[i].start.x, w.y + trackY - tracks[i].start.y, w.width, w.angle, w.openFor, w.closedFor);
+					tracks[i].wallGroup.add(wall);
+				}
+				tracks[i].loc = new FlxPoint(trackX, trackY);
+				trackX += tracks[i].end.x - tracks[i].start.x;
+				trackY += tracks[i].end.y - tracks[i].start.y;
+			}
+		}
+		
+		private function resetMap():void
+		{
+			trackGroup.clear();
+			wallGroup.clear();
+			if (currentTrack > 0) {
+				trackGroup.add(tracks[currentTrack - 1].img);
+				wallGroup.add( tracks[currentTrack - 1].wallGroup);
+			}
+			trackGroup.add(tracks[currentTrack].img);
+			wallGroup.add( tracks[currentTrack].wallGroup);
+			if (currentTrack < tracks.length - 1) {
+				trackGroup.add(tracks[currentTrack + 1].img);
+				wallGroup.add( tracks[currentTrack + 1].wallGroup);
+			}
+			
+			x = tracks[currentTrack].loc.x;
+			y = tracks[currentTrack].loc.y;
+			dir = tracks[currentTrack].startAngle;
+			speed = 1.0;
+			
+			finished = false;
+		}
+		
+		private function updateMap():void
+		{
+			if (!finished) {
+				var end:FlxPoint = new FlxPoint(tracks[currentTrack].loc.x + tracks[currentTrack].end.x -tracks[currentTrack].start.x,
+												tracks[currentTrack].loc.y + tracks[currentTrack].end.y -tracks[currentTrack].start.y);
+				if (FlxU.getDistance(new FlxPoint(x, y), end) < 40 ) {
+					if (currentTrack == tracks.length - 1) {
+						finished = true;
+					}
+					else {
+						currentTrack++;
+						if (currentTrack > 1) {
+							trackGroup.remove(tracks[currentTrack - 2].img);
+							wallGroup.remove( tracks[currentTrack - 2].wallGroup, true);
+						}
+						if (currentTrack < tracks.length - 1) {
+							trackGroup.add(tracks[currentTrack + 1].img);
+							wallGroup.add( tracks[currentTrack + 1].wallGroup);
+						}
+					}
+				}
+			}
+		}
+		
+		private function trackCollision():Boolean
+		{
+			return (tracks[currentTrack].img.pixels.getPixel(x - tracks[currentTrack].img.x, y - tracks[currentTrack].img.y) == 0x0000ff)
 		}
 		
 		private function keyboardInput():void
@@ -180,14 +268,6 @@ package states
 				lastMouseX = FlxG.mouse.screenX;
 				lastMouseY = FlxG.mouse.screenY;
 			}
-		}
-		
-		private function reset():void
-		{
-			x = 40;
-			y = 40;
-			dir = 350;
-			speed = 1.0;
 		}
 	}
 

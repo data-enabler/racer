@@ -18,7 +18,7 @@ package objects
 	import org.flixel.plugin.photonstorm.FlxCollision;
 	
 	/**
-	 * ...
+	 * Caution: ugly hacks ahead
 	 * @author Adrian Mullings
 	 */
 	public class Wall extends FlxGroup
@@ -34,32 +34,32 @@ package objects
 		private var baseAngle:int;
 		private var baseX:int;
 		private var baseY:int;
-		private var closeFor:uint;
 		private var openFor:uint;
+		private var closedFor:uint;
 		private var interval:uint;
 		
-		public function Wall(centerX:int, centerY:int, width:uint, angle:int, interval:uint, closeFor:uint)
+		public function Wall(centerX:int, centerY:int, width:uint, angle:int, openFor:uint, closedFor:uint)
 		{
 			super();
 			
 			this.baseX = centerX - width / 2;
 			this.baseY = centerY;
 			this.baseAngle = angle;
-			this.closeFor = closeFor;
-			this.interval = Math.max(interval, closeFor);
-			this.openFor = Math.max(0, this.interval - closeFor);
+			this.openFor = openFor;
+			this.closedFor = closedFor;
+			this.interval = openFor + closedFor;
 			
 			this.shadow = new FlxSprite(centerX - width / 2, centerY - THICKNESS / 2);
 			this.shadow.makeGraphic(width, THICKNESS, 0x44000000);
 			this.shadow.origin = new FlxPoint(width / 2, THICKNESS / 2);
-			this.shadow.angle = this.baseAngle + 90;
+			this.shadow.angle = -1 * this.baseAngle + 90;
 			this.wall = new MovingWall(centerX - width / 2, centerY, WallGraphic);
 			var scale:Number = width / this.wall.width;
 			this.wall.scale = new FlxPoint(scale, scale);
 			this.wall.height = this.wall.height * scale;
 			this.wall.width = width;
 			this.wall.origin = new FlxPoint(width / 2, 0);
-			this.wall.angle = this.baseAngle + 90;
+			this.wall.angle = -1 * this.baseAngle + 90;
 			
 			this.add(shadow);
 			this.add(wall);
@@ -67,21 +67,21 @@ package objects
 		
 		override public function update():void
 		{
+			super.update();
+			
 			var time:uint = FlxU.getTicks() % interval;
 			
 			if (time < openFor)
 			{
 				var pos:Number = 1.0 - Math.abs(2 * time / openFor - 1.0);
-				wall.x = baseX + pos * Math.cos((baseAngle + 90) / 180 * Math.PI) * TRAVEL_DIST;
-				wall.y = baseY + pos * Math.sin((baseAngle + 90) / 180 * Math.PI) * TRAVEL_DIST * -1;
+				wall.x = baseX + pos * Math.cos((baseAngle + 180) / 180 * Math.PI) * TRAVEL_DIST;
+				wall.y = baseY + pos * Math.sin((baseAngle + 180) / 180 * Math.PI) * TRAVEL_DIST * -1;
 			}
 			else
 			{
 				wall.x = baseX;
 				wall.y = baseY;
 			}
-			
-			super.update();
 		}
 		
 		public function collides(sprite:FlxSprite):Boolean
