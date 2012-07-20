@@ -1,12 +1,12 @@
 package states 
 {
+	import audio.*;
 	import flash.filters.*;
 	import flash.geom.*;
-	import flash.media.Sound;
-	import flash.text.TextField;
+	import flash.media.*;
+	import flash.text.*;
+	import objects.*;
 	import org.flixel.*;
-	import org.flixel.system.input.Mouse;
-	import audio.*;
 		
 	/**
 	 * ...
@@ -32,6 +32,7 @@ package states
 		private var track:FlxSprite;
 		private var filter:BitmapFilter;
 		private var needle:FlxSprite;
+		private var wall:Wall;
 		private var bgAudio:Sound;
 		private var musicPlayer:MP3Player;
 		private var x:Number;
@@ -43,10 +44,6 @@ package states
 		private var txtY:TextField;
 		private var txtSpeed:TextField;
 		private var txtDir:TextField;
-		/*private var txtX:FlxText;
-		private var txtY:FlxText;
-		private var txtSpeed:FlxText;
-		private var txtDir:FlxText;*/
 		
 		override public function create():void
 		{
@@ -74,6 +71,9 @@ package states
 			bgAudio = new SewingMachine() as Sound;
 			musicPlayer.playLoadedSound(bgAudio);
 			
+			wall = new Wall(310, 125, 100, 225, 2000, 500);
+			add(wall);
+			
 			// debug info
 			txtX = new TextField();
 			txtY = new TextField();
@@ -95,18 +95,6 @@ package states
 			FlxG.camera.getContainerSprite().parent.addChild(txtY);
 			FlxG.camera.getContainerSprite().parent.addChild(txtSpeed);
 			FlxG.camera.getContainerSprite().parent.addChild(txtDir);
-			/*txtX = new FlxText(0, 0, 150);
-			txtY = new FlxText(0, 12, 150);
-			txtSpeed = new FlxText(0, 24, 150);
-			txtDir = new FlxText(0, 36, 150);
-			txtX.scrollFactor = new FlxPoint(0, 0);
-			txtY.scrollFactor = new FlxPoint(0, 0);
-			txtSpeed.scrollFactor = new FlxPoint(0, 0);
-			txtDir.scrollFactor = new FlxPoint(0, 0);
-			add(txtX);
-			add(txtY);
-			add(txtSpeed);
-			add(txtDir);*/
 		}
 		
 		override public function update():void
@@ -148,8 +136,13 @@ package states
 			// adjust audio speed
 			musicPlayer.playbackSpeed = speed;
 			
+			wall.update();
+			
 			// if collision
-			if (track.pixels.getPixel(x, y) == 0xff0000) {
+			if (track.pixels.getPixel(x, y) == 0x0000ff) {
+				reset();
+			}
+			if (wall.collides(needle)) {
 				reset();
 			}
 		}
