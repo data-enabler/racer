@@ -44,6 +44,7 @@ package states
 		private var dir:Number;
 		private var speed:Number;
 		
+		private var txtHealth:TextField;
 		private var txtX:TextField;
 		private var txtY:TextField;
 		private var txtSpeed:TextField;
@@ -75,6 +76,12 @@ package states
 			musicPlayer = new MP3Player();
 			bgAudio = new SewingMachine() as Sound;
 			musicPlayer.playLoadedSound(bgAudio);
+			
+			txtHealth = new TextField();
+			txtHealth.textColor = 0xFFFFFF;
+			txtHealth.x = FlxG.width - 20;
+			txtHealth.y = 0;
+			FlxG.camera.getContainerSprite().parent.addChild(txtHealth);
 			
 			// debug info
 			txtX = new TextField();
@@ -113,11 +120,27 @@ package states
 			if (!finished) {
 				x += dx;
 				y += dy;
+				
+				if (trackCollision()) {
+					if (speed > 0.3)
+						needle.health--;
+					speed = 0;
+					x -= (dx > 0)? 2 : -2;
+					y -= (dy > 0)? 2 : -2;
+					
+					if (needle.health <= 0) {
+						needle.health = 3;
+						resetMap();
+					}
+				}
 			}
 			else {
 				currentTrack = 0;
+				needle.health = 3;
 				resetMap();
 			}
+			
+			txtHealth.text = needle.health.toString();
 			
 			// debug info display
 			txtX.text = x.toString();
@@ -146,10 +169,7 @@ package states
 			
 			updateMap();
 			
-			// if collision
-			if (trackCollision()) {
-				resetMap();
-			}
+			// if collision with wall			
 			for (var i:String in wallGroup.members) {
 				for (var j:String in wallGroup.members[i].members) {
 					var wall:Wall = wallGroup.members[i].members[j];
@@ -166,6 +186,7 @@ package states
 			var trackY:int = 0;
 			
 			currentTrack = 0;
+			needle.health = 3;
 			finished = false;
 			tracks = new Array(names.length);
 			for (var i:uint = 0; i < names.length; i++) {
