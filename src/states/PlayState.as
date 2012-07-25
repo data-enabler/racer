@@ -38,9 +38,12 @@ package states
 		
 		[Embed(source = "../../res/sewing machine normal.mp3")]
 		private var SewingMachine:Class;
+		[Embed(source = "../../res/knot.png")]
+		private var ImgKnot:Class;
 		
 		private var currentTrack:uint;
 		private var tracks:Array;
+		private var trackNames:Array;
 		private var trackGroup:FlxGroup;
 		private var wallGroup:FlxGroup;
 		private var finished:Boolean;
@@ -60,6 +63,7 @@ package states
 		private var lastStitch:FlxPoint;
 		private var stitchAboveSurface:Boolean;
 		private var stitchSprite:FlxSprite;
+		private var knotGroup:FlxGroup;
 		
 		private var txtSlow:TextField;
 		private var txtMed:TextField;
@@ -72,7 +76,7 @@ package states
 		
 		override public function create():void
 		{
-			FlxG.bgColor = 0xff224466;
+			FlxG.bgColor = 0xff224466; 
 			//FlxG.visualDebug = true;
 			
 			filter = new BlurFilter(0, 0, BitmapFilterQuality.LOW);
@@ -86,11 +90,14 @@ package states
 			FlxG.mouse.show();
 			
 			trackGroup = new FlxGroup();
+			knotGroup  = new FlxGroup();
 			wallGroup  = new FlxGroup();
-			loadTracks(["level1", "level3", "level2"]);
+			trackNames = ["level1", "level3", "level2"];
+			loadTracks(trackNames);
 			resetMap();
 			
 			add(trackGroup);
+			add(knotGroup);
 			add(stitchSprite);
 			add(needle);
 			add(wallGroup);
@@ -166,8 +173,8 @@ package states
 				}
 			}
 			else {
-				currentTrack = 0;
-				resetStats();
+				trackNames.unshift(trackNames.pop());
+				loadTracks(trackNames);
 				resetMap();
 			}
 			
@@ -216,6 +223,8 @@ package states
 			resetStats();
 			goalDir = Direction.FORWARDS;
 			finished = false;
+			knotGroup.kill();
+			knotGroup.revive();
 			
 			tracks = new Array(names.length);
 			for (var i:uint = 0; i < names.length; i++) {
@@ -320,6 +329,12 @@ package states
 			}
 			
 			if (crashSlow >= MAX_CRASH_SLOW) {
+				var knot:FlxSprite = knotGroup.recycle(FlxSprite) as FlxSprite;
+				knot.loadGraphic(ImgKnot);
+				knot.color = STITCH_COLOR;
+				knot.x = x - knot.width  / 2;
+				knot.y = y - knot.height / 2;
+				knotGroup.add(knot);
 				crashSlow = 0;
 				resetMap();
 			}
