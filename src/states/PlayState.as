@@ -1,6 +1,9 @@
 package states 
 {
 	import audio.*;
+	import flash.display.BitmapData;
+	import flash.display.Graphics;
+	import flash.display.Shape;
 	import flash.filters.*;
 	import flash.geom.*;
 	import flash.media.*;
@@ -31,10 +34,11 @@ package states
 		private const CRASH_SPEED_MED:Number = 0.3;
 		private const CRASH_SPEED_FAST:Number = 2.5;
 		private const MAX_CRASH_SLOW:uint = 1;
-		private const MAX_CRASH_MED:uint  = 2;
-		private const MAX_CRASH_FAST:uint = 2;
+		private const MAX_CRASH_MED:uint  = 5;
+		private const MAX_CRASH_FAST:uint = 7;
 		private const STITCH_LENGTH:Number = 10.0;
 		private const STITCH_COLOR:uint = 0xff000000;
+		private const TRACK_WIDTH:uint = 40;	// for creating tracks programmatically
 		
 		[Embed(source = "../../res/sewing machine normal.mp3")]
 		private var SewingMachine:Class;
@@ -60,6 +64,7 @@ package states
 		private var crashSlow:uint;
 		private var crashMed:uint;
 		private var crashFast:uint;
+		private var path:Array;
 		private var lastStitch:FlxPoint;
 		private var stitchAboveSurface:Boolean;
 		private var stitchSprite:FlxSprite;
@@ -173,8 +178,12 @@ package states
 				}
 			}
 			else {
-				trackNames.unshift(trackNames.pop());
-				loadTracks(trackNames);
+				if (tracks.length > 1) {
+					createTrack(path);
+				}
+				else {
+					loadTracks(trackNames);
+				}
 				resetMap();
 			}
 			
@@ -183,7 +192,7 @@ package states
 			txtFast.text = "Fast Crashes        " + crashFast.toString();
 			
 			// draw stitches
-			drawStitches();
+			updatePath();
 			
 			// update filter
 			var blur:Number = Math.max(speed - 1.0, 0) * BLUR_RATIO;
@@ -222,6 +231,7 @@ package states
 			currentTrack = 0;
 			resetStats();
 			goalDir = Direction.FORWARDS;
+			path = new Array();
 			finished = false;
 			knotGroup.kill();
 			knotGroup.revive();
@@ -240,6 +250,61 @@ package states
 				trackX += tracks[i].end.x - tracks[i].start.x;
 				trackY += tracks[i].end.y - tracks[i].start.y;
 			}
+		}
+		
+		private function createTrack(prevPath:Array):void
+		{
+			currentTrack = 0;
+			resetStats();
+			goalDir = Direction.FORWARDS;
+			finished = false;
+			knotGroup.kill();
+			knotGroup.revive();
+			
+			var len:uint = prevPath.length;
+			if (len > 1) 
+			{
+				var maxX:Number = Number.MIN_VALUE;
+				var maxY:Number = Number.MIN_VALUE;
+				var minX:Number = Number.MAX_VALUE;
+				var minY:Number = Number.MAX_VALUE;
+				
+				for (var i:uint = 0; i < len; i++) {
+					if (prevPath[i].x > maxX) maxX = prevPath[i].x;
+					if (prevPath[i].y > maxY) maxY = prevPath[i].y;
+					if (prevPath[i].x < minX) minX = prevPath[i].x;
+					if (prevPath[i].y < minY) minY = prevPath[i].y;
+				}
+				
+				var width:uint  = (maxX - minX) + 2 * TRACK_WIDTH;
+				var height:uint = (maxY - minY) + 2 * TRACK_WIDTH;
+				
+				var img:BitmapData = new BitmapData(width, height, true, 0xff0000ff);
+				var shape:Shape = new Shape();
+				var canvas:Graphics = shape.graphics;
+				canvas.lineStyle(TRACK_WIDTH, 0x00ff00);
+				
+				for (var j:uint = 0; j < len - 1; j++) {
+					canvas.moveTo(prevPath[j].x + TRACK_WIDTH,     prevPath[j].y + TRACK_WIDTH); // offset from edges
+					canvas.lineTo(prevPath[j + 1].x + TRACK_WIDTH, prevPath[j + 1].y + TRACK_WIDTH);
+				}
+				
+				img.draw(shape);
+				tracks = new Array(1);
+				tracks[0] = new Object();
+				tracks[0].start = new FlxPoint(prevPath[0].x - minX + TRACK_WIDTH,
+											   prevPath[0].y - minY + TRACK_WIDTH);
+				tracks[0].startAngle = 90 - FlxU.getAngle(new FlxPoint(prevPath[0].x, prevPath[0].y),
+														  new FlxPoint(prevPath[1].x, prevPath[1].y));
+				tracks[0].end = new FlxPoint(prevPath[len - 1].x - minX + TRACK_WIDTH,
+											 prevPath[len - 1].y - minY + TRACK_WIDTH);
+				tracks[0].img = new FlxSprite(-TRACK_WIDTH, -TRACK_WIDTH);
+				tracks[0].img.pixels = img;
+				tracks[0].wallGroup = new FlxGroup();
+				tracks[0].loc = new FlxPoint(0, 0);
+			}
+			
+			path = new Array();
 		}
 		
 		private function resetMap():void
@@ -262,6 +327,7 @@ package states
 			dir = tracks[currentTrack].startAngle;
 			speed = 1.0;
 			lastStitch = new FlxPoint(x, y);
+			path.push(new FlxPoint(x, y));
 			
 			goalDir = Direction.FORWARDS;
 			finished = false;
@@ -352,7 +418,7 @@ package states
 		}
 		
 		
-		private function drawStitches():void
+		private function updatePath():void
 		{
 			var current:FlxPoint = new FlxPoint(x, y);
 			
@@ -370,6 +436,7 @@ package states
 				}
 				stitchAboveSurface = !stitchAboveSurface;
 				lastStitch = new FlxPoint(x, y);
+				path.push(new FlxPoint(x, y));
 			}
 			
 			if (stitchAboveSurface) {
