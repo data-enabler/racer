@@ -30,6 +30,9 @@ package states
 		private const SPEED_INCREMENT_MOUSE:Number = 0.003;
 		private const DIR_INCREMENT_KEYBOARD:Number = 1;
 		private const DIR_INCREMENT_MOUSE:Number = 0.5;
+		private const STARTING_THREAD:uint = 9999;
+		private const THREAD_COMSUMPTION_MULTIPLIER:Number = 1.0;
+		private const THREAD_COMSUMPTION_MAX:Number = 3.0;
 		private const BLUR_RATIO:Number = 10.0;
 		private const BUMP_DIST:Number = 5.0;
 		private const CRASH_SPEED_MED:Number = 0.5;
@@ -66,6 +69,7 @@ package states
 		private var y:Number;
 		private var dir:Number;
 		private var speed:Number;
+		private var thread:Number;
 		private var slowdownStartTime:uint;
 		private var crashSlow:uint;
 		private var crashMed:uint;
@@ -185,41 +189,43 @@ package states
 			
 			// if not near track end
 			if (!finished) {
-				if (state != RaceState.BACKWARDS) {
-					x += dx;
-					y += dy;
-					
-					// collisions
-					if (trackCollision()) handleCollision(dx, dy);
-					
-					for (var i:String in wallGroup.members) {
-						for (var j:String in wallGroup.members[i].members) {
-							var wall:Wall = wallGroup.members[i].members[j];
-							if (wall.collides(needle)) {
-								handleCollision(dx, dy);
-							}
-						}
-					}
-				}
-				else {
-					// angles for display aren't the same as what FlxU.getAngle returns, hence the 90-angle
-					var angleDiff:Number = ((90 - FlxU.getAngle(new FlxPoint(x, y), path[path.length - 1])) - dir) % 360;
-					if (angleDiff >=  180) angleDiff -= 360;
-					if (angleDiff <= -180) angleDiff += 360;
-					if (Math.abs(angleDiff) <= 90) {
+				if (thread > 0)  {
+					if (state != RaceState.BACKWARDS) {
 						x += dx;
 						y += dy;
 						
-						if (trackCollision()) {
-							x -= dx;
-							y -= dy;
-							speed = 0.0;
+						// collisions
+						if (trackCollision()) handleCollision(dx, dy);
+						
+						for (var i:String in wallGroup.members) {
+							for (var j:String in wallGroup.members[i].members) {
+								var wall:Wall = wallGroup.members[i].members[j];
+								if (wall.collides(needle)) {
+									handleCollision(dx, dy);
+								}
+							}
 						}
+						thread = Math.max(0, thread - THREAD_COMSUMPTION_MULTIPLIER * Math.min(THREAD_COMSUMPTION_MAX, 1 / Math.sqrt(speed)));
 					}
 					else {
-						speed = 0.0;
+						// angles for rotating sprites aren't the same as what FlxU.getAngle returns, hence the 90-angle
+						var angleDiff:Number = ((90 - FlxU.getAngle(new FlxPoint(x, y), path[path.length - 1])) - dir) % 360;
+						if (angleDiff >=  180) angleDiff -= 360;
+						if (angleDiff <= -180) angleDiff += 360;
+						if (Math.abs(angleDiff) <= 90) {
+							x += dx;
+							y += dy;
+							
+							if (trackCollision()) {
+								x -= dx;
+								y -= dy;
+								speed = 0.0;
+							}
+						}
+						else speed = 0.0;
 					}
 				}
+				else speed = 0.0
 			}
 			else {
 				if (tracks.length > 1) {
@@ -232,6 +238,7 @@ package states
 			}
 			
 			// draw HUD info
+			txtThread.text = "Thread Remaining: " + thread.toString();
 			var s:uint = (state == RaceState.SLOW)? SLOWDOWN_PENALTY_DURATION - (FlxU.getTicks() - slowdownStartTime) : crashSlow;
 			txtSlow.text = "Slow Crashes: " + s.toString();
 			txtMed.text  = "Medium Crashes: " + crashMed.toString() + "/" + MAX_CRASH_MED.toString();
@@ -261,8 +268,8 @@ package states
 			stitchSurface.y = int(y - DISP_RADIUS);
 			
 			// adjust audio speed
-			//musicPlayer.playbackSpeed = speed;
-			musicPlayer.playbackSpeed = 0;
+			musicPlayer.playbackSpeed = speed;
+			//musicPlayer.playbackSpeed = 0;
 			
 			// update track
 			updateMap();
@@ -288,6 +295,7 @@ package states
 			knotGroup.kill();
 			knotGroup.revive();
 			stitchSurface.makeGraphic(DISP_RADIUS * 2, DISP_RADIUS * 2, 0);
+			thread = STARTING_THREAD;
 			
 			tracks = new Array(names.length);
 			for (var i:uint = 0; i < names.length; i++) {
@@ -314,6 +322,7 @@ package states
 			knotGroup.kill();
 			knotGroup.revive();
 			stitchSurface.makeGraphic(DISP_RADIUS * 2, DISP_RADIUS * 2, 0);
+			thread = STARTING_THREAD;
 			
 			var len:uint = prevPath.length;
 			if (len > 1) 
@@ -423,7 +432,6 @@ package states
 				else {
 					if (FlxU.getDistance(new FlxPoint(x, y), start) < 40 ) {
 						state = RaceState.FORWARDS;
-						dir += 180;
 					}
 				}
 			}
