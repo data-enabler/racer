@@ -70,6 +70,7 @@ package states
 		private var stitchSprite:FlxSprite;
 		private var knotGroup:FlxGroup;
 		
+		private var txtThread:TextField;
 		private var txtSlow:TextField;
 		private var txtMed:TextField;
 		private var txtFast:TextField;
@@ -92,6 +93,7 @@ package states
 			FlxG.camera.target = needle;
 			FlxG.camera.zoom = ZOOM;
 			FlxG.camera.antialiasing = true;
+			FlxG.camera.getContainerSprite().parent.scrollRect = new Rectangle(0, 0, FlxG.width, FlxG.height);
 			FlxG.mouse.show();
 			
 			trackGroup = new FlxGroup();
@@ -111,18 +113,23 @@ package states
 			bgAudio = new SewingMachine() as Sound;
 			musicPlayer.playLoadedSound(bgAudio);
 			
-			txtSlow = new TextField();
-			txtMed  = new TextField();
-			txtFast = new TextField();
-			txtSlow.textColor = 0xFFFFFF;
-			txtMed.textColor  = 0xFFFFFF;
-			txtFast.textColor = 0xFFFFFF;
-			txtSlow.x = FlxG.width - 100;
-			txtMed.x  = FlxG.width - 100;
-			txtFast.x = FlxG.width - 100;
-			txtSlow.y = 0;
-			txtMed.y  = 12;
-			txtFast.y = 24;
+			txtThread = new TextField();
+			txtSlow   = new TextField();
+			txtMed    = new TextField();
+			txtFast   = new TextField();
+			txtThread.textColor = 0xFFFFFF;
+			txtSlow.textColor   = 0xFFFFFF;
+			txtMed.textColor    = 0xFFFFFF;
+			txtFast.textColor   = 0xFFFFFF;
+			txtThread.x = FlxG.width - 100;
+			txtSlow.x   = FlxG.width - 100;
+			txtMed.x    = FlxG.width - 100;
+			txtFast.x   = FlxG.width - 100;
+			txtThread.y = 0;
+			txtSlow.y   = 12;
+			txtMed.y    = 24;
+			txtFast.y   = 36;
+			FlxG.camera.getContainerSprite().parent.addChild(txtThread);
 			FlxG.camera.getContainerSprite().parent.addChild(txtSlow);
 			FlxG.camera.getContainerSprite().parent.addChild(txtMed);
 			FlxG.camera.getContainerSprite().parent.addChild(txtFast);
