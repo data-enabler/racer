@@ -96,7 +96,7 @@ package states
 			FlxG.bgColor = 0xff224466; 
 			//FlxG.visualDebug = true;
 			
-			filter = new BlurFilter(0, 0, BitmapFilterQuality.LOW);
+			filter = new BlurFilter(0, 0, BitmapFilterQuality.HIGH);
 			needle = new FlxSprite();
 			needle.makeGraphic(NEEDLE_SIZE, NEEDLE_SIZE);
 			stitchSprite = new FlxSprite();
@@ -205,7 +205,7 @@ package states
 								}
 							}
 						}
-						thread = Math.max(0, thread - THREAD_COMSUMPTION_MULTIPLIER * Math.min(THREAD_COMSUMPTION_MAX, 1 / Math.sqrt(speed)));
+						if (speed > 0) thread = Math.max(0, thread - THREAD_COMSUMPTION_MULTIPLIER * Math.min(THREAD_COMSUMPTION_MAX, 1 / Math.sqrt(speed)));
 					}
 					else {
 						// angles for rotating sprites aren't the same as what FlxU.getAngle returns, hence the 90-angle
@@ -252,12 +252,30 @@ package states
 			
 			// update filter
 			var blur:Number = Math.max(speed - 1.0, 0) * BLUR_RATIO;
-			filter = new BlurFilter(blur, blur, BitmapFilterQuality.HIGH);
+			(filter as BlurFilter).blurX = blur;
 			var intX:int = Math.floor(x) - tracks[currentTrack].img.x;
 			var intY:int = Math.floor(y) - tracks[currentTrack].img.y;
-			tracks[currentTrack].img.framePixels.applyFilter(tracks[currentTrack].img.pixels, 
-				new Rectangle(intX - DISP_RADIUS, intY - DISP_RADIUS, DISP_RADIUS * 2, DISP_RADIUS * 2), 
-				new Point(intX - DISP_RADIUS, intY - DISP_RADIUS), filter);
+			var tmp1:BitmapData = new BitmapData(DISP_RADIUS * 2, DISP_RADIUS * 2, true, 0x00000000);
+			var tmp2:BitmapData = new BitmapData(DISP_RADIUS * 2, DISP_RADIUS * 2, true, 0x00000000);
+			var tmp3:BitmapData = new BitmapData(DISP_RADIUS * 2, DISP_RADIUS * 2, true, 0x00000000);
+			var mat:Matrix = new Matrix();
+			mat.translate( -DISP_RADIUS, -DISP_RADIUS);
+			mat.rotate(dir / 180 * Math.PI);
+			mat.translate(DISP_RADIUS, DISP_RADIUS);
+			tmp1.copyPixels(tracks[currentTrack].img.pixels, 
+				new Rectangle(intX - DISP_RADIUS, intY - DISP_RADIUS, DISP_RADIUS * 2, DISP_RADIUS * 2), new Point(0, 0));
+			tmp2.draw(tmp1, mat, null, null, null, true);
+			tmp3.applyFilter(tmp2, new Rectangle(0, 0, DISP_RADIUS * 2, DISP_RADIUS * 2), new Point(0, 0), filter);
+			mat.invert();
+			mat.translate(intX - DISP_RADIUS, intY - DISP_RADIUS);
+			tracks[currentTrack].img.framePixels.draw(tmp3, mat, null, null, null, true);
+			
+			/* Makes some freaky effects
+			var bmd:BitmapData = tracks[currentTrack].img.framePixels;
+			bmd.draw(bmd, mat);
+			bmd.applyFilter(bmd, new Rectangle( -DISP_RADIUS, -DISP_RADIUS, DISP_RADIUS * 2, DISP_RADIUS * 2), new Point(0, 0), filter);
+			mat.invert();
+			bmd.draw(bmd, mat);*/
 			
 			// move and rotate camera
 			needle.x = x - needle.width  / 2;
