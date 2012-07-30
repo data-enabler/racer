@@ -34,10 +34,12 @@ package states
 		private const CRASH_SPEED_MED:Number = 0.3;
 		private const CRASH_SPEED_FAST:Number = 2.5;
 		private const MAX_CRASH_SLOW:uint = 1;
-		private const MAX_CRASH_MED:uint  = 5;
-		private const MAX_CRASH_FAST:uint = 7;
+		private const MAX_CRASH_MED:uint  = 2;
+		private const MAX_CRASH_FAST:uint = 2;
 		private const STITCH_LENGTH:Number = 10.0;
+		private const STITCH_THRESH:Number = 10.0; // how close you have to be to undo a stitch
 		private const STITCH_COLOR:uint = 0xff000000;
+		private const STITCH_WIDTH:Number = 2.0;
 		private const TRACK_WIDTH:uint = 40;	// for creating tracks programmatically
 		
 		[Embed(source = "../../res/sewing machine normal.mp3")]
@@ -68,6 +70,7 @@ package states
 		private var lastStitch:FlxPoint;
 		private var stitchAboveSurface:Boolean;
 		private var stitchSprite:FlxSprite;
+		private var stitchSurface:FlxSprite;
 		private var knotGroup:FlxGroup;
 		
 		private var txtThread:TextField;
@@ -89,6 +92,7 @@ package states
 			needle = new FlxSprite();
 			needle.makeGraphic(4, 4);
 			stitchSprite = new FlxSprite();
+			stitchSurface = new FlxSprite();
 			
 			FlxG.camera.target = needle;
 			FlxG.camera.zoom = ZOOM;
@@ -105,6 +109,7 @@ package states
 			
 			add(trackGroup);
 			add(knotGroup);
+			add(stitchSurface);
 			add(stitchSprite);
 			add(needle);
 			add(wallGroup);
@@ -169,18 +174,35 @@ package states
 			
 			// if not near track end
 			if (!finished) {
-				x += dx;
-				y += dy;
-				
-				// collisions
-				if (trackCollision()) handleCollision(dx, dy);
-				
-				for (var i:String in wallGroup.members) {
-					for (var j:String in wallGroup.members[i].members) {
-						var wall:Wall = wallGroup.members[i].members[j];
-						if (wall.collides(needle)) {
-							handleCollision(dx, dy);
+				if (goalDir == Direction.FORWARDS) 
+				{
+					x += dx;
+					y += dy;
+					
+					// collisions
+					if (trackCollision()) handleCollision(dx, dy);
+					
+					for (var i:String in wallGroup.members) {
+						for (var j:String in wallGroup.members[i].members) {
+							var wall:Wall = wallGroup.members[i].members[j];
+							if (wall.collides(needle)) {
+								handleCollision(dx, dy);
+							}
 						}
+					}
+				}
+				else {
+					// angles for display aren't the same as what FlxU.getAngle returns, hence the 90-angle
+					var angleDiff:Number = ((90 - FlxU.getAngle(new FlxPoint(x, y), path[path.length - 1])) - dir) % 360;
+					if (angleDiff >=  180) angleDiff -= 360;
+					if (angleDiff <= -180) angleDiff += 360;
+					txtThread.text = angleDiff.toString();
+					if (Math.abs(angleDiff) <= 90 && !trackCollision()) {
+						x += dx;
+						y += dy;
+					}
+					else {
+						speed = 0.0;
 					}
 				}
 			}
@@ -215,10 +237,12 @@ package states
 			needle.y = y - needle.height / 2;
 			needle.angle = 360 - dir;
 			FlxG.camera.angle = dir;
+			stitchSurface.x = int(x - DISP_RADIUS);
+			stitchSurface.y = int(y - DISP_RADIUS);
 			
 			// adjust audio speed
-			musicPlayer.playbackSpeed = speed;
-			//musicPlayer.playbackSpeed = 0;
+			//musicPlayer.playbackSpeed = speed;
+			musicPlayer.playbackSpeed = 0;
 			
 			// update track
 			updateMap();
@@ -242,6 +266,7 @@ package states
 			finished = false;
 			knotGroup.kill();
 			knotGroup.revive();
+			stitchSurface.makeGraphic(DISP_RADIUS * 2, DISP_RADIUS * 2, 0);
 			
 			tracks = new Array(names.length);
 			for (var i:uint = 0; i < names.length; i++) {
@@ -267,6 +292,7 @@ package states
 			finished = false;
 			knotGroup.kill();
 			knotGroup.revive();
+			stitchSurface.makeGraphic(DISP_RADIUS * 2, DISP_RADIUS * 2, 0);
 			
 			var len:uint = prevPath.length;
 			if (len > 1) 
@@ -351,22 +377,32 @@ package states
 		private function updateMap():void
 		{
 			if (!finished) {
-				var end:FlxPoint = new FlxPoint(tracks[currentTrack].loc.x + tracks[currentTrack].end.x -tracks[currentTrack].start.x,
-												tracks[currentTrack].loc.y + tracks[currentTrack].end.y -tracks[currentTrack].start.y);
-				if (FlxU.getDistance(new FlxPoint(x, y), end) < 40 ) {
-					if (currentTrack == tracks.length - 1) {
-						finished = true;
+				var end:FlxPoint   = new FlxPoint(tracks[currentTrack].loc.x + tracks[currentTrack].end.x - tracks[currentTrack].start.x,
+												  tracks[currentTrack].loc.y + tracks[currentTrack].end.y - tracks[currentTrack].start.y);
+				var start:FlxPoint = new FlxPoint(tracks[currentTrack].loc.x,
+												  tracks[currentTrack].loc.y);
+				if (goalDir == Direction.FORWARDS) {
+					if (FlxU.getDistance(new FlxPoint(x, y), end) < 40 ) {
+						if (currentTrack == tracks.length - 1) {
+							finished = true;
+						}
+						else {
+							currentTrack++;
+							if (currentTrack > 1) {
+								trackGroup.remove(tracks[currentTrack - 2].img);
+								wallGroup.remove( tracks[currentTrack - 2].wallGroup, true);
+							}
+							if (currentTrack < tracks.length - 1) {
+								trackGroup.add(tracks[currentTrack + 1].img);
+								wallGroup.add( tracks[currentTrack + 1].wallGroup);
+							}
+						}
 					}
-					else {
-						currentTrack++;
-						if (currentTrack > 1) {
-							trackGroup.remove(tracks[currentTrack - 2].img);
-							wallGroup.remove( tracks[currentTrack - 2].wallGroup, true);
-						}
-						if (currentTrack < tracks.length - 1) {
-							trackGroup.add(tracks[currentTrack + 1].img);
-							wallGroup.add( tracks[currentTrack + 1].wallGroup);
-						}
+				}
+				else {
+					if (FlxU.getDistance(new FlxPoint(x, y), start) < 40 ) {
+						goalDir = Direction.FORWARDS;
+						dir += 180;
 					}
 				}
 			}
@@ -413,7 +449,7 @@ package states
 			}
 			if (crashMed >= MAX_CRASH_MED) {
 				crashMed = 0;
-				resetMap();
+				goalDir = Direction.BACKWARDS;
 			}
 			if (crashFast >= MAX_CRASH_FAST) {
 				if (currentTrack < tracks.length - 1) {
@@ -429,22 +465,24 @@ package states
 		{
 			var current:FlxPoint = new FlxPoint(x, y);
 			
-			if (FlxU.getDistance(current, lastStitch) >= STITCH_LENGTH) {
-				if (stitchAboveSurface) {
-					var baseX:int = tracks[currentTrack].loc.x - tracks[currentTrack].start.x;
-					var baseY:int = tracks[currentTrack].loc.y - tracks[currentTrack].start.y;
-					Raster.efla(lastStitch.x - baseX, 
-								lastStitch.y - baseY,
-								x - baseX, 
-								y - baseY,
-								STITCH_COLOR, tracks[currentTrack].img.pixels);
-					
-					stitchSprite.makeGraphic(1, 1, 0x00000000);
+			if (goalDir == Direction.FORWARDS) {
+				if (FlxU.getDistance(current, lastStitch) >= STITCH_LENGTH) {
+					if (stitchAboveSurface) stitchSprite.makeGraphic(1, 1, 0x00000000);
+					stitchAboveSurface = !stitchAboveSurface;
+					lastStitch = new FlxPoint(x, y);
+					path.push(new FlxPoint(x, y));
 				}
-				stitchAboveSurface = !stitchAboveSurface;
-				lastStitch = new FlxPoint(x, y);
-				path.push(new FlxPoint(x, y));
 			}
+			else {
+				if (FlxU.getDistance(current, lastStitch) <= STITCH_THRESH) {
+					if (stitchAboveSurface) stitchSprite.makeGraphic(1, 1, 0x00000000);
+					stitchAboveSurface = !stitchAboveSurface;
+					path.pop();
+					lastStitch.copyFrom(path[path.length - 1]);
+				}
+			}
+			
+			drawStitches();
 			
 			if (stitchAboveSurface) {
 				stitchSprite.makeGraphic(2 * STITCH_LENGTH, 2 * STITCH_LENGTH, 0x00000000, true);
@@ -456,8 +494,24 @@ package states
 							y - lastStitch.y + mid.y,
 							STITCH_COLOR, stitchSprite.framePixels);
 			}
+		}
+		
+		private function drawStitches():void
+		{
+			var w:uint = FlxG.width;
+			var h:uint = FlxG.height;
+			var shape:Shape = new Shape();
+			var canvas:Graphics = shape.graphics;
+			canvas.lineStyle(STITCH_WIDTH, STITCH_COLOR);
 			
-			
+			for (var i:int = 0; i < path.length - 1; i += 2) {
+				canvas.moveTo(path[i].x,     path[i].y);
+				canvas.lineTo(path[i + 1].x, path[i + 1].y);
+			}
+			stitchSurface.framePixels.fillRect(stitchSurface.framePixels.rect, 0);
+			var m:Matrix = new Matrix();
+			m.translate(int(DISP_RADIUS - x), int(DISP_RADIUS - y));
+			stitchSurface.framePixels.draw(shape, m);
 		}
 		
 		private function keyboardInput():void
