@@ -24,29 +24,33 @@ package states
 		private const DISP_RADIUS:int = Math.sqrt((FlxG.width / ZOOM) * (FlxG.width / ZOOM) + (FlxG.height / ZOOM) * (FlxG.height / ZOOM)) / 2;
 		private const SPEED_MULTIPLIER:Number = 1.0;
 		private const SPEED_MAX:Number = 5.0;
-		private const SPEED_MAX_WALK:Number = 0.5;
+		private const SPEED_MAX_WALK:Number = 0.75;
+		private const SPEED_MAX_SLOW:Number = 0.5;
 		private const SPEED_INCREMENT_KEYBOARD:Number = 0.01;
 		private const SPEED_INCREMENT_MOUSE:Number = 0.003;
 		private const DIR_INCREMENT_KEYBOARD:Number = 1;
 		private const DIR_INCREMENT_MOUSE:Number = 0.5;
 		private const BLUR_RATIO:Number = 10.0;
 		private const BUMP_DIST:Number = 5.0;
-		private const CRASH_SPEED_MED:Number = 0.3;
+		private const CRASH_SPEED_MED:Number = 0.5;
 		private const CRASH_SPEED_FAST:Number = 2.5;
 		private const MAX_CRASH_SLOW:uint = 1;
-		private const MAX_CRASH_MED:uint  = 2;
-		private const MAX_CRASH_FAST:uint = 2;
+		private const MAX_CRASH_MED:uint  = 5;
+		private const MAX_CRASH_FAST:uint = 7;
+		private const SLOWDOWN_PENALTY_DURATION:uint = 10000;
 		private const STITCH_LENGTH:Number = 10.0;
 		private const STITCH_THRESH:Number = 10.0; // how close you have to be to undo a stitch
-		private const STITCH_COLOR:uint = 0xff000000;
+		private const STITCH_COLOR:uint = 0xff999999;
 		private const STITCH_WIDTH:Number = 2.0;
-		private const TRACK_WIDTH:uint = 40;	// for creating tracks programmatically
+		private const TRACK_WIDTH:uint = 80;	// for creating tracks programmatically
+		private const NEEDLE_SIZE:uint = 4;
 		
 		[Embed(source = "../../res/sewing machine normal.mp3")]
 		private var SewingMachine:Class;
 		[Embed(source = "../../res/knot.png")]
 		private var ImgKnot:Class;
 		
+		private var _state:uint;
 		private var currentTrack:uint;
 		private var tracks:Array;
 		private var trackNames:Array;
@@ -62,7 +66,7 @@ package states
 		private var y:Number;
 		private var dir:Number;
 		private var speed:Number;
-		private var goalDir:uint;
+		private var slowdownStartTime:uint;
 		private var crashSlow:uint;
 		private var crashMed:uint;
 		private var crashFast:uint;
@@ -90,7 +94,7 @@ package states
 			
 			filter = new BlurFilter(0, 0, BitmapFilterQuality.LOW);
 			needle = new FlxSprite();
-			needle.makeGraphic(4, 4);
+			needle.makeGraphic(NEEDLE_SIZE, NEEDLE_SIZE);
 			stitchSprite = new FlxSprite();
 			stitchSurface = new FlxSprite();
 			
@@ -126,10 +130,14 @@ package states
 			txtSlow.textColor   = 0xFFFFFF;
 			txtMed.textColor    = 0xFFFFFF;
 			txtFast.textColor   = 0xFFFFFF;
-			txtThread.x = FlxG.width - 100;
-			txtSlow.x   = FlxG.width - 100;
-			txtMed.x    = FlxG.width - 100;
-			txtFast.x   = FlxG.width - 100;
+			txtThread.width = 120;
+			txtSlow.width   = 120;
+			txtMed.width    = 120;
+			txtFast.width   = 120;
+			txtThread.x = FlxG.width - 120;
+			txtSlow.x   = FlxG.width - 120;
+			txtMed.x    = FlxG.width - 120;
+			txtFast.x   = FlxG.width - 120;
 			txtThread.y = 0;
 			txtSlow.y   = 12;
 			txtMed.y    = 24;
@@ -169,13 +177,15 @@ package states
 			keyboardInput();
 			mouseInput();
 			
+			if (state == RaceState.SLOW)      speed = Math.min(speed, SPEED_MAX_SLOW);
+			if (state == RaceState.BACKWARDS) speed = Math.min(speed, SPEED_MAX_WALK);
+			
 			var dx:Number = speed * SPEED_MULTIPLIER * Math.cos(dir / 180 * Math.PI);
 			var dy:Number = speed * SPEED_MULTIPLIER * Math.sin(dir / 180 * Math.PI) * -1;
 			
 			// if not near track end
 			if (!finished) {
-				if (goalDir == Direction.FORWARDS) 
-				{
+				if (state != RaceState.BACKWARDS) {
 					x += dx;
 					y += dy;
 					
@@ -196,10 +206,15 @@ package states
 					var angleDiff:Number = ((90 - FlxU.getAngle(new FlxPoint(x, y), path[path.length - 1])) - dir) % 360;
 					if (angleDiff >=  180) angleDiff -= 360;
 					if (angleDiff <= -180) angleDiff += 360;
-					txtThread.text = angleDiff.toString();
-					if (Math.abs(angleDiff) <= 90 && !trackCollision()) {
+					if (Math.abs(angleDiff) <= 90) {
 						x += dx;
 						y += dy;
+						
+						if (trackCollision()) {
+							x -= dx;
+							y -= dy;
+							speed = 0.0;
+						}
 					}
 					else {
 						speed = 0.0;
@@ -216,12 +231,17 @@ package states
 				resetMap();
 			}
 			
-			txtSlow.text = "Slow Crashes       " + crashSlow.toString();
-			txtMed.text  = "Medium Crashes " + crashMed.toString();
-			txtFast.text = "Fast Crashes        " + crashFast.toString();
+			// draw HUD info
+			var s:uint = (state == RaceState.SLOW)? SLOWDOWN_PENALTY_DURATION - (FlxU.getTicks() - slowdownStartTime) : crashSlow;
+			txtSlow.text = "Slow Crashes: " + s.toString();
+			txtMed.text  = "Medium Crashes: " + crashMed.toString() + "/" + MAX_CRASH_MED.toString();
+			txtFast.text = "Fast Crashes: " + crashFast.toString() + "/" + MAX_CRASH_FAST.toString();
 			
 			// draw stitches
 			updatePath();
+			
+			// keep track of slowdown time, etc
+			updateState();
 			
 			// update filter
 			var blur:Number = Math.max(speed - 1.0, 0) * BLUR_RATIO;
@@ -261,8 +281,9 @@ package states
 			
 			currentTrack = 0;
 			resetStats();
-			goalDir = Direction.FORWARDS;
+			state = RaceState.FORWARDS;
 			path = new Array();
+			stitchAboveSurface = true;
 			finished = false;
 			knotGroup.kill();
 			knotGroup.revive();
@@ -288,7 +309,7 @@ package states
 		{
 			currentTrack = 0;
 			resetStats();
-			goalDir = Direction.FORWARDS;
+			state = RaceState.FORWARDS;
 			finished = false;
 			knotGroup.kill();
 			knotGroup.revive();
@@ -338,6 +359,7 @@ package states
 			}
 			
 			path = new Array();
+			stitchAboveSurface = true;
 		}
 		
 		private function resetMap():void
@@ -362,9 +384,8 @@ package states
 			lastStitch = new FlxPoint(x, y);
 			path.push(new FlxPoint(x, y));
 			
-			goalDir = Direction.FORWARDS;
+			state = RaceState.FORWARDS;
 			finished = false;
-			stitchAboveSurface = true;
 		}
 		
 		private function resetStats():void
@@ -381,7 +402,7 @@ package states
 												  tracks[currentTrack].loc.y + tracks[currentTrack].end.y - tracks[currentTrack].start.y);
 				var start:FlxPoint = new FlxPoint(tracks[currentTrack].loc.x,
 												  tracks[currentTrack].loc.y);
-				if (goalDir == Direction.FORWARDS) {
+				if (state != RaceState.BACKWARDS) {
 					if (FlxU.getDistance(new FlxPoint(x, y), end) < 40 ) {
 						if (currentTrack == tracks.length - 1) {
 							finished = true;
@@ -401,7 +422,7 @@ package states
 				}
 				else {
 					if (FlxU.getDistance(new FlxPoint(x, y), start) < 40 ) {
-						goalDir = Direction.FORWARDS;
+						state = RaceState.FORWARDS;
 						dir += 180;
 					}
 				}
@@ -415,41 +436,34 @@ package states
 		
 		private function handleCollision(dx:Number, dy:Number):void
 		{
-			if (speed < CRASH_SPEED_MED) {
-				crashSlow++;
-			}
+			if (speed <= CRASH_SPEED_MED) crashSlow++;
+			else if (speed <= CRASH_SPEED_FAST) crashMed++;
 			else {
-				if (speed < CRASH_SPEED_FAST) {
-					crashMed++;
-				}
-				else {
-					crashFast++;
-				}
-				
-				// backwards movement
-				var newdx:Number = BUMP_DIST * Math.cos(dir / 180 * Math.PI) * -1;
-				var newdy:Number = BUMP_DIST * Math.sin(dir / 180 * Math.PI);
-				
-				speed = 0;
-				x -= dx;
-				x += newdx;
-				x -= dy;
-				y += newdy;
-			}
-			
-			if (crashSlow >= MAX_CRASH_SLOW) {
+				crashFast++;
 				var knot:FlxSprite = knotGroup.recycle(FlxSprite) as FlxSprite;
 				knot.loadGraphic(ImgKnot);
 				knot.color = STITCH_COLOR;
 				knot.x = x - knot.width  / 2;
 				knot.y = y - knot.height / 2;
 				knotGroup.add(knot);
+			}
+				
+			// backwards movement
+			var newdx:Number = BUMP_DIST * Math.cos(dir / 180 * Math.PI) * -1;
+			var newdy:Number = BUMP_DIST * Math.sin(dir / 180 * Math.PI);
+			speed = 0;
+			x -= dx;
+			x += newdx;
+			x -= dy;
+			y += newdy;
+			
+			if (crashSlow >= MAX_CRASH_SLOW) {
 				crashSlow = 0;
-				resetMap();
+				state = RaceState.SLOW;
 			}
 			if (crashMed >= MAX_CRASH_MED) {
 				crashMed = 0;
-				goalDir = Direction.BACKWARDS;
+				state = RaceState.BACKWARDS;
 			}
 			if (crashFast >= MAX_CRASH_FAST) {
 				if (currentTrack < tracks.length - 1) {
@@ -465,7 +479,7 @@ package states
 		{
 			var current:FlxPoint = new FlxPoint(x, y);
 			
-			if (goalDir == Direction.FORWARDS) {
+			if (state != RaceState.BACKWARDS) {
 				if (FlxU.getDistance(current, lastStitch) >= STITCH_LENGTH) {
 					if (stitchAboveSurface) stitchSprite.makeGraphic(1, 1, 0x00000000);
 					stitchAboveSurface = !stitchAboveSurface;
@@ -514,6 +528,37 @@ package states
 			stitchSurface.framePixels.draw(shape, m);
 		}
 		
+		private function updateState():void
+		{
+			if (state == RaceState.SLOW) {
+				if (FlxU.getTicks() - slowdownStartTime > SLOWDOWN_PENALTY_DURATION) {
+					state = RaceState.FORWARDS;
+				}
+			}
+		}
+		
+		private function set state(newState:uint):void
+		{
+			switch(newState) {
+				case RaceState.FORWARDS:
+					needle.makeGraphic(NEEDLE_SIZE, NEEDLE_SIZE, 0xffffffff);
+					break;
+				case RaceState.BACKWARDS:
+					needle.makeGraphic(NEEDLE_SIZE, NEEDLE_SIZE, 0xffff9999);
+					break;
+				case RaceState.SLOW:
+					needle.makeGraphic(NEEDLE_SIZE, NEEDLE_SIZE, 0xff6666ff);
+					slowdownStartTime = FlxU.getTicks();
+					break;
+			}
+			_state = newState;
+		}
+		
+		private function get state():uint
+		{
+			return _state;
+		}
+		
 		private function keyboardInput():void
 		{
 			if (FlxG.keys.UP) {
@@ -551,8 +596,9 @@ package states
 	}
 }
 
-final class Direction
+final class RaceState
 { 
 	public static const FORWARDS:uint = 0; 
-	public static const BACKWARDS:uint = 1; 
+	public static const BACKWARDS:uint = 1;
+	public static const SLOW:uint = 2;
 }
